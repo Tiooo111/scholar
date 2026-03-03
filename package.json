@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "wf:run": "node engine/wf-runner.js"
+    "wf:list": "node engine/wf-cli.js list",
+    "wf:run": "node engine/wf-cli.js run",
+    "wf:api": "node engine/wf-api.js",
+    "wf:rpc": "node engine/wf-rpc-stdio.js"
   },
   "dependencies": {
     "yaml": "^2.8.1"

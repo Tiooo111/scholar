@@ -262,17 +262,15 @@ async function run() {
     } else {
       h.type = 'task';
       h.outputs = node.outputs || [];
-      if (!args.dryRun) {
-        for (const out of node.outputs || []) {
-          await materializeOutput({
-            outputName: out,
-            node,
-            role: node.role,
-            runDir,
-            packRoot,
-            ctx,
-          });
-        }
+      for (const out of node.outputs || []) {
+        await materializeOutput({
+          outputName: out,
+          node,
+          role: node.role,
+          runDir,
+          packRoot,
+          ctx,
+        });
       }
       h.result = 'ok';
       h.next = node.next || 'end';
