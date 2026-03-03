@@ -1,6 +1,12 @@
-# Workflow Engine (v0)
+# Workflow Engine (v0.2)
 
-This folder contains the minimal execution layer for workflow packs.
+This folder contains the execution layer for workflow packs.
+
+New in v0.2:
+- Contract validation from `contracts/contract-rules.yaml`
+- Execution state checkpoints (`execution_state.json`)
+- Resume support (`--resume-run-dir`)
+- Event stream log (`execution_events.jsonl`)
 
 ## 1) CLI
 
@@ -37,6 +43,7 @@ Optional flags:
 - `--dry-run`
 - `--run-dir <path>`
 - `--max-steps <n>`
+- `--resume-run-dir <path>` (resume from saved `execution_state.json`)
 - `--inject-deviation <requirements_mismatch|architecture_mismatch|implementation_bug|verification_gap>`
 
 ## 2) REST API
@@ -78,7 +85,7 @@ npm run wf:rpc
 Methods (JSON line protocol):
 
 - `list_workflows`
-- `run_workflow` with params `{ packId, dryRun, runDir, maxSteps, injectDeviation }`
+- `run_workflow` with params `{ packId, dryRun, runDir, resumeRunDir, maxSteps, injectDeviation }`
 
 Example request line:
 

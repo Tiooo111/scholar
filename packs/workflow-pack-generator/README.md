@@ -36,4 +36,11 @@ node engine/wf-runner.js \
   --inject-deviation implementation_bug
 ```
 
-Outputs are written under `.runs/<run-id>/` with `execution_report.json`.
+Outputs are written under `.runs/<run-id>/` with:
+- `execution_report.json`
+- `execution_state.json` (resume checkpoint)
+- `execution_events.jsonl` (event timeline)
+
+This pack also includes machine-checkable output contracts in:
+- `contracts/contract-rules.yaml`
+- `contracts/*.schema.json`

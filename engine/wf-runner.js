@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
+import Ajv from 'ajv';
 
 function parseArgs(argv) {
   const args = {
     workflow: 'packs/workflow-pack-generator/workflow.yaml',
     runDir: null,
+    resumeRunDir: null,
     maxSteps: 40,
     dryRun: false,
     injectDeviation: null,
@@ -15,6 +17,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--workflow') args.workflow = argv[++i];
     else if (a === '--run-dir') args.runDir = argv[++i];
+    else if (a === '--resume-run-dir') args.resumeRunDir = argv[++i];
     else if (a === '--max-steps') args.maxSteps = Number(argv[++i] || 40);
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--inject-deviation') args.injectDeviation = argv[++i];
@@ -44,6 +47,11 @@ async function writeText(file, content) {
   await fs.writeFile(file, content, 'utf-8');
 }
 
+async function appendJsonl(file, obj) {
+  await ensureDir(path.dirname(file));
+  await fs.appendFile(file, `${JSON.stringify(obj)}\n`, 'utf-8');
+}
+
 function nowTag() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -51,6 +59,7 @@ function nowTag() {
 }
 
 function resolveRunDir(args) {
+  if (args.resumeRunDir) return path.resolve(args.resumeRunDir);
   if (args.runDir) return path.resolve(args.runDir);
   return path.resolve('.runs', `workflow-pack-generator-${nowTag()}`);
 }
@@ -94,6 +103,89 @@ async function copyIfExists(src, dst) {
   return false;
 }
 
+function normHeading(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+async function loadContractRules(packRoot) {
+  const p = path.join(packRoot, 'contracts', 'contract-rules.yaml');
+  if (!(await exists(p))) return [];
+  const text = await readText(p);
+  const doc = YAML.parse(text) || {};
+  return Array.isArray(doc.rules) ? doc.rules : [];
+}
+
+async function validateRule(rule, runDir, packRoot, ajv, schemaCache) {
+  const filePath = path.join(runDir, rule.file);
+  if (!(await exists(filePath))) {
+    return { ok: false, file: rule.file, type: rule.type, reason: 'file_missing' };
+  }
+
+  if (rule.type === 'markdown_headers') {
+    const text = await readText(filePath);
+    const headings = text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^#{1,6}\s+/.test(line))
+      .map(normHeading);
+
+    const required = (rule.requiredHeaders || []).map(normHeading);
+    const missing = required.filter((h) => !headings.includes(h));
+    if (missing.length) {
+      return { ok: false, file: rule.file, type: rule.type, reason: 'missing_headers', missing };
+    }
+    return { ok: true, file: rule.file, type: rule.type };
+  }
+
+  if (rule.type === 'yaml_keys') {
+    const text = await readText(filePath);
+    const obj = YAML.parse(text);
+    const required = Array.isArray(rule.requiredKeys) ? rule.requiredKeys : [];
+    const missing = required.filter((k) => !(k in (obj || {})));
+    if (missing.length) {
+      return { ok: false, file: rule.file, type: rule.type, reason: 'missing_keys', missing };
+    }
+    return { ok: true, file: rule.file, type: rule.type };
+  }
+
+  if (rule.type === 'json_schema') {
+    const text = await readText(filePath);
+    const data = JSON.parse(text);
+    const schemaPath = path.join(packRoot, rule.schema || '');
+    if (!schemaCache.has(schemaPath)) {
+      const schema = JSON.parse(await readText(schemaPath));
+      schemaCache.set(schemaPath, ajv.compile(schema));
+    }
+    const validate = schemaCache.get(schemaPath);
+    const ok = validate(data);
+    if (!ok) {
+      return {
+        ok: false,
+        file: rule.file,
+        type: rule.type,
+        reason: 'schema_validation_failed',
+        errors: validate.errors || [],
+      };
+    }
+    return { ok: true, file: rule.file, type: rule.type };
+  }
+
+  return { ok: true, file: rule.file, type: rule.type, skipped: true };
+}
+
+async function validateOutputsContracts(outputs, runDir, packRoot, rules, ajv, schemaCache) {
+  const targets = new Set(outputs.filter((o) => !String(o).endsWith('/')));
+  const matched = rules.filter((r) => targets.has(String(r.file || '')));
+
+  const results = [];
+  for (const rule of matched) {
+    results.push(await validateRule(rule, runDir, packRoot, ajv, schemaCache));
+  }
+
+  const violations = results.filter((r) => !r.ok);
+  return { results, violations };
+}
+
 async function materializeOutput({ outputName, node, role, runDir, packRoot, ctx }) {
   const clean = String(outputName);
   if (clean.endsWith('/')) {
@@ -118,14 +210,19 @@ async function materializeOutput({ outputName, node, role, runDir, packRoot, ctx
     // default to no open questions so alignment gate can pass in MVP
     await writeText(outPath, '');
   } else if (base === 'verification_report.md') {
-    await writeText(outPath, '# verification_report.md\n\nstatus: pass\nchecks:\n- name: smoke\n  result: pass\n');
+    if (ctx.forcedDeviation || (ctx.injectDeviation && !ctx.injectedDeviation)) {
+      await writeText(outPath, '# verification_report.md\n\nstatus: fail\nchecks:\n- name: contract_or_deviation\n  result: fail\n');
+    } else {
+      await writeText(outPath, '# verification_report.md\n\nstatus: pass\nchecks:\n- name: smoke\n  result: pass\n');
+    }
   } else if (base === 'deviation_report.md') {
-    if (ctx.injectDeviation && !ctx.injectedDeviation) {
+    const devType = (!ctx.injectedDeviation && ctx.injectDeviation) || ctx.forcedDeviation;
+    if (devType) {
       await writeText(
         outPath,
-        `# deviation_report.md\n\nStatus: has_deviation\nType: ${ctx.injectDeviation}\nSeverity: medium\nEvidence: injected for test\n`
+        `# deviation_report.md\n\nStatus: has_deviation\nType: ${devType}\nSeverity: medium\nEvidence: auto-generated by runner\n`
       );
-      ctx.injectedDeviation = true;
+      if (ctx.injectDeviation && !ctx.injectedDeviation) ctx.injectedDeviation = true;
     } else {
       await writeText(outPath, '# deviation_report.md\n\nStatus: no_deviation\n');
     }
@@ -200,6 +297,18 @@ async function resolveDeviationType(runDir, node) {
   return allowed.has(t) ? t : null;
 }
 
+async function loadState(runDir) {
+  const p = path.join(runDir, 'execution_state.json');
+  if (!(await exists(p))) return null;
+  const text = await readText(p);
+  return JSON.parse(text);
+}
+
+async function saveState(runDir, state) {
+  const p = path.join(runDir, 'execution_state.json');
+  await writeText(p, `${JSON.stringify(state, null, 2)}\n`);
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2));
   const workflowPath = path.resolve(args.workflow);
@@ -210,17 +319,25 @@ async function run() {
 
   await ensureDir(runDir);
 
-  const ctx = {
+  const rules = await loadContractRules(packRoot);
+  const ajv = new Ajv({ allErrors: true });
+  const schemaCache = new Map();
+
+  const resumed = args.resumeRunDir ? (await loadState(runDir)) : null;
+
+  const ctx = resumed?.ctx || {
     runId: path.basename(runDir),
     workflowId: wf.id || 'workflow',
     artifacts: [],
     injectDeviation: args.injectDeviation,
     injectedDeviation: false,
+    forcedDeviation: null,
+    contractViolations: [],
   };
 
-  const history = [];
-  let current = wf.entryNode;
-  let steps = 0;
+  const history = resumed?.history || [];
+  let current = resumed?.current || wf.entryNode;
+  let steps = resumed?.steps || 0;
 
   while (current && current !== 'end' && steps < args.maxSteps) {
     const node = nodeMap.get(current);
@@ -257,6 +374,8 @@ async function run() {
       } else {
         h.result = 'has_deviation';
         h.next = node.router.onDeviation?.[deviationType] || node.router.onNoDeviation;
+        // consume one-time forced deviation once routed
+        ctx.forcedDeviation = null;
       }
       current = h.next;
     } else {
@@ -272,7 +391,25 @@ async function run() {
           ctx,
         });
       }
-      h.result = 'ok';
+
+      const { violations } = await validateOutputsContracts(
+        node.outputs || [],
+        runDir,
+        packRoot,
+        rules,
+        ajv,
+        schemaCache
+      );
+
+      if (violations.length) {
+        h.result = 'ok_with_contract_violations';
+        h.contractViolations = violations;
+        ctx.contractViolations.push(...violations.map((v) => ({ nodeId: node.id, ...v })));
+        ctx.forcedDeviation = ctx.forcedDeviation || 'implementation_bug';
+      } else {
+        h.result = 'ok';
+      }
+
       h.next = node.next || 'end';
       current = h.next;
     }
@@ -280,12 +417,32 @@ async function run() {
     h.finishedAt = new Date().toISOString();
     history.push(h);
     steps += 1;
+
+    const state = {
+      workflowId: wf.id,
+      runDir,
+      steps,
+      current,
+      history,
+      ctx,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveState(runDir, state);
+    await appendJsonl(path.join(runDir, 'execution_events.jsonl'), {
+      ts: new Date().toISOString(),
+      step: h.step,
+      nodeId: h.nodeId,
+      type: h.type,
+      result: h.result,
+      next: h.next,
+    });
   }
 
   const report = {
     workflowId: wf.id,
     runId: ctx.runId,
     runDir,
+    resumedFromState: !!resumed,
     dryRun: args.dryRun,
     injectedDeviation: args.injectDeviation || null,
     steps,
@@ -293,12 +450,21 @@ async function run() {
     terminatedBy: current === 'end' ? 'end' : (steps >= args.maxSteps ? 'maxSteps' : 'unknown'),
     history,
     artifacts: [...new Set(ctx.artifacts)],
+    contractViolations: ctx.contractViolations,
   };
 
   const reportPath = path.join(runDir, 'execution_report.json');
   await writeText(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 
-  console.log(JSON.stringify({ ok: true, workflow: wf.id, runDir, reportPath, steps, terminatedBy: report.terminatedBy }, null, 2));
+  console.log(JSON.stringify({
+    ok: true,
+    workflow: wf.id,
+    runDir,
+    reportPath,
+    steps,
+    terminatedBy: report.terminatedBy,
+    contractViolations: ctx.contractViolations.length,
+  }, null, 2));
 }
 
 run().catch((err) => {

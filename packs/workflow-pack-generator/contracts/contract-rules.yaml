@@ -1,0 +1,40 @@
+version: "0.1"
+rules:
+  - file: requirements.md
+    type: markdown_headers
+    requiredHeaders:
+      - "# requirements.md"
+      - "## Problem Statement"
+      - "## In Scope"
+      - "## Out of Scope"
+      - "## Success Criteria (Business)"
+
+  - file: acceptance_criteria.md
+    type: markdown_headers
+    requiredHeaders:
+      - "# acceptance_criteria.md"
+      - "## Functional Criteria"
+      - "## Non-Functional Criteria"
+
+  - file: constraints.md
+    type: markdown_headers
+    requiredHeaders:
+      - "# constraints.md"
+      - "## Runtime Constraints"
+      - "## Security Constraints"
+
+  - file: workflow.yaml
+    type: yaml_keys
+    requiredKeys: ["id", "entryNode", "nodes"]
+
+  - file: roles.yaml
+    type: yaml_keys
+    requiredKeys: ["roles"]
+
+  - file: tasks.yaml
+    type: yaml_keys
+    requiredKeys: ["backlog"]
+
+  - file: pack_manifest.json
+    type: json_schema
+    schema: contracts/pack_manifest.schema.json

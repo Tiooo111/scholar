@@ -40,6 +40,7 @@ export async function runPack(packId, opts = {}) {
   const args = ['engine/wf-runner.js', '--workflow', workflow];
 
   if (opts.runDir) args.push('--run-dir', String(opts.runDir));
+  if (opts.resumeRunDir) args.push('--resume-run-dir', String(opts.resumeRunDir));
   if (Number.isFinite(opts.maxSteps)) args.push('--max-steps', String(opts.maxSteps));
   if (opts.dryRun) args.push('--dry-run');
   if (opts.injectDeviation) args.push('--inject-deviation', String(opts.injectDeviation));

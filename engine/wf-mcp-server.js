@@ -33,6 +33,7 @@ server.tool(
     packId: z.string().min(1),
     dryRun: z.boolean().optional(),
     runDir: z.string().optional(),
+    resumeRunDir: z.string().optional(),
     maxSteps: z.number().int().positive().optional(),
     injectDeviation: z
       .enum([
