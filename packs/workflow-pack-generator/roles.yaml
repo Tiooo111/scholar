@@ -41,9 +41,9 @@ roles:
     objective: "Implement each task and produce runnable pack artifacts."
     executor:
       type: template
-      # To use custom shell execution for this role, switch to:
-      # type: shell
-      # command: "./scripts/build_pack.sh"
+      # Example script executor:
+      # type: script
+      # script: "scripts/build_pack.js"
     inputs: ["tasks.yaml", "contracts_map.md"]
     outputs: ["generated_pack/", "implementation_delta.md"]
     boundaries:
@@ -53,6 +53,9 @@ roles:
     objective: "Validate outputs against acceptance criteria and contracts."
     executor:
       type: template
+      # Example script executor:
+      # type: script
+      # script: "scripts/verify_pack.js"
     inputs: ["generated_pack/", "acceptance_criteria.md", "contracts/"]
     outputs: ["verification_report.md", "deviation_report.md"]
     boundaries:

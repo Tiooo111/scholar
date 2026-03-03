@@ -45,4 +45,8 @@ This pack also includes machine-checkable output contracts in:
 - `contracts/contract-rules.yaml`
 - `contracts/*.schema.json`
 
-Role-level executor defaults are declared in `roles.yaml` (currently `template`, with optional `shell` example for builder).
+Role-level executor defaults are declared in `roles.yaml` (currently `template`, with optional `script` examples).
+
+Script executor examples are provided in:
+- `scripts/build_pack.js`
+- `scripts/verify_pack.js`

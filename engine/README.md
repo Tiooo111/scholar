@@ -55,11 +55,13 @@ Executors are resolved in this order:
 2. `roles.yaml` role-level `executor`
 3. default `template`
 
-Supported executors (v0.4):
+Supported executors (v0.5):
 - `template`: built-in artifact materializer
 - `shell`: run a shell command in run directory
+- `script`: run a Node script file
+- `llm`: call OpenAI-compatible chat completion and map JSON output to declared files
 
-Example role-level executor:
+Example role-level executors:
 
 ```yaml
 roles:
@@ -67,15 +69,35 @@ roles:
     executor:
       type: shell
       command: "./scripts/build_pack.sh"
+
+  verifier:
+    executor:
+      type: script
+      script: "scripts/verify_pack.js"
+      args: ["--strict"]
+
+  requirements-analyst:
+    executor:
+      type: llm
+      provider: openai_compat
+      model: gpt-4o-mini
+      apiKeyEnv: OPENAI_API_KEY
+      baseUrl: https://api.openai.com/v1
+      prompt: |
+        Create concise requirement artifacts for node {{nodeId}}.
 ```
 
-Environment variables available to shell executor:
+Environment variables available to shell/script executor:
 - `WF_RUN_DIR`
 - `WF_PACK_ROOT`
 - `WF_NODE_ID`
 - `WF_ROLE`
 - `WF_WORKFLOW_ID`
 - `WF_RUN_ID`
+
+For `llm` executor:
+- Model response must be a JSON object mapping declared output filenames to content.
+- If `--dry-run` is enabled, non-template executors automatically fall back to template materialization (no external calls).
 
 ### Runtime policy in `workflow.yaml`
 

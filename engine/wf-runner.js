@@ -154,6 +154,163 @@ async function runShellExecutor({ node, spec, runDir, packRoot, ctx }) {
   });
 }
 
+async function runScriptExecutor({ node, spec, runDir, packRoot, ctx }) {
+  const scriptPathRaw = spec.script || spec.config?.script;
+  if (!scriptPathRaw) {
+    const e = new Error(`script executor missing script at node ${node.id}`);
+    e.code = 'task_error';
+    throw e;
+  }
+
+  const scriptPath = path.isAbsolute(scriptPathRaw)
+    ? scriptPathRaw
+    : path.join(packRoot, scriptPathRaw);
+
+  const args = Array.isArray(spec.args)
+    ? spec.args
+    : (Array.isArray(spec.config?.args) ? spec.config.args : []);
+
+  await execFileP('node', [scriptPath, ...(args.map((x) => String(x)))], {
+    cwd: runDir,
+    env: {
+      ...process.env,
+      WF_RUN_DIR: runDir,
+      WF_PACK_ROOT: packRoot,
+      WF_NODE_ID: node.id,
+      WF_ROLE: node.role || '',
+      WF_WORKFLOW_ID: ctx.workflowId,
+      WF_RUN_ID: ctx.runId,
+    },
+    timeout: 10 * 60 * 1000,
+  });
+}
+
+function parseJsonObjectFromText(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+
+  try {
+    return JSON.parse(t);
+  } catch {
+    const s = t.indexOf('{');
+    const e = t.lastIndexOf('}');
+    if (s >= 0 && e > s) {
+      try {
+        return JSON.parse(t.slice(s, e + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+function renderTemplateText(template, vars) {
+  return String(template || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+    const v = vars[key];
+    return v == null ? '' : String(v);
+  });
+}
+
+async function runLLMExecutor({ node, rolesDoc, spec, runDir, packRoot, ctx }) {
+  const model = spec.model || spec.config?.model;
+  if (!model) {
+    const e = new Error(`llm executor missing model at node ${node.id}`);
+    e.code = 'task_error';
+    throw e;
+  }
+
+  const provider = spec.provider || spec.config?.provider || 'openai_compat';
+  if (provider !== 'openai_compat') {
+    const e = new Error(`unsupported_llm_provider:${provider}`);
+    e.code = 'task_error';
+    throw e;
+  }
+
+  const baseUrl = spec.baseUrl || spec.config?.baseUrl || process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+  const apiKeyEnv = spec.apiKeyEnv || spec.config?.apiKeyEnv || 'OPENAI_API_KEY';
+  const apiKey = process.env[apiKeyEnv];
+  if (!apiKey) {
+    const e = new Error(`missing_api_key_env:${apiKeyEnv}`);
+    e.code = 'task_error';
+    throw e;
+  }
+
+  const roleObj = rolesDoc?.roles?.[node.role || ''] || {};
+  const objective = roleObj?.objective || '';
+
+  const userTemplate = spec.prompt
+    || spec.config?.prompt
+    || 'Generate declared outputs for node {{nodeId}} as JSON object: {"filename":"content"}';
+
+  const userPrompt = renderTemplateText(userTemplate, {
+    nodeId: node.id,
+    role: node.role || '',
+    outputs: JSON.stringify(node.outputs || []),
+    workflowId: ctx.workflowId,
+  });
+
+  const systemPrompt = spec.systemPrompt
+    || spec.config?.systemPrompt
+    || [
+      'You are a workflow node executor.',
+      `Role: ${node.role || 'unknown'}`,
+      objective ? `Objective: ${objective}` : '',
+      'Return ONLY valid JSON object mapping output file names to text content.',
+    ].filter(Boolean).join('\n');
+
+  const body = {
+    model,
+    temperature: Number(spec.temperature ?? spec.config?.temperature ?? 0.2),
+    max_tokens: Number(spec.maxTokens ?? spec.config?.maxTokens ?? 1200),
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: `${userPrompt}\n\nDeclared outputs: ${JSON.stringify(node.outputs || [])}`,
+      },
+    ],
+  };
+
+  const res = await fetch(`${String(baseUrl).replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const e = new Error(`llm_http_${res.status}:${text.slice(0, 300)}`);
+    e.code = 'task_error';
+    throw e;
+  }
+
+  const json = await res.json();
+  const content = json?.choices?.[0]?.message?.content || '';
+  const outMap = parseJsonObjectFromText(content);
+
+  if (!outMap || typeof outMap !== 'object') {
+    const e = new Error('llm_invalid_json_output');
+    e.code = 'task_error';
+    throw e;
+  }
+
+  for (const out of node.outputs || []) {
+    const clean = String(out);
+    if (clean.endsWith('/')) {
+      await ensureDir(path.join(runDir, clean));
+      continue;
+    }
+    const payload = outMap[clean] ?? outMap[path.basename(clean)] ?? '';
+    await writeText(path.join(runDir, clean), String(payload));
+    ctx.artifacts.push(clean);
+  }
+}
+
 async function assertDeclaredOutputsExist(outputs, runDir) {
   const missing = [];
   for (const out of outputs || []) {
@@ -414,10 +571,24 @@ async function withTimeout(promiseFactory, timeoutMs, label = 'task') {
   }
 }
 
-async function executeTaskAttempt({ node, rolesDoc, runDir, packRoot, ctx, rules, ajv, schemaCache }) {
+async function executeTaskAttempt({ node, rolesDoc, runDir, packRoot, ctx, rules, ajv, schemaCache, dryRun }) {
   const spec = resolveExecutorSpec(node, rolesDoc);
+  let executedType = spec.type;
 
-  if (spec.type === 'template') {
+  if (dryRun && spec.type !== 'template') {
+    // In dry-run, avoid external side effects; still materialize outputs for gate progress.
+    executedType = `${spec.type}:dryrun_fallback`;
+    for (const out of node.outputs || []) {
+      await materializeOutput({
+        outputName: out,
+        node,
+        role: node.role,
+        runDir,
+        packRoot,
+        ctx,
+      });
+    }
+  } else if (spec.type === 'template') {
     for (const out of node.outputs || []) {
       await materializeOutput({
         outputName: out,
@@ -430,6 +601,10 @@ async function executeTaskAttempt({ node, rolesDoc, runDir, packRoot, ctx, rules
     }
   } else if (spec.type === 'shell') {
     await runShellExecutor({ node, spec, runDir, packRoot, ctx });
+  } else if (spec.type === 'script') {
+    await runScriptExecutor({ node, spec, runDir, packRoot, ctx });
+  } else if (spec.type === 'llm') {
+    await runLLMExecutor({ node, rolesDoc, spec, runDir, packRoot, ctx });
   } else {
     const err = new Error(`unsupported_executor:${spec.type}`);
     err.code = 'task_error';
@@ -460,7 +635,7 @@ async function executeTaskAttempt({ node, rolesDoc, runDir, packRoot, ctx, rules
     throw err;
   }
 
-  return { ok: true, executor: spec.type };
+  return { ok: true, executor: executedType };
 }
 
 async function run() {
@@ -552,7 +727,7 @@ async function run() {
 
         try {
           const attemptOut = await withTimeout(
-            () => executeTaskAttempt({ node, rolesDoc, runDir, packRoot, ctx, rules, ajv, schemaCache }),
+            () => executeTaskAttempt({ node, rolesDoc, runDir, packRoot, ctx, rules, ajv, schemaCache, dryRun: args.dryRun }),
             policy.timeoutMs,
             node.id
           );
