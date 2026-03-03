@@ -81,34 +81,6 @@ async function publishMarkdownReport(mdPath, dryRun) {
 }
 
 
-function shortText(s, max = 140) {
-  const t = String(s || '').replace(/\s+/g, ' ').trim();
-  if (!t) return '';
-  return t.length > max ? t.slice(0, max) : t;
-}
-
-function fmtList(papers, limit = 10) {
-  const lines = [];
-  const top = papers.slice(0, limit);
-  for (let i = 0; i < top.length; i++) {
-    const p = top[i];
-    const idx = String(i + 1).padStart(2, '0');
-    const sig = [];
-    if (p.signals?.watchHit) sig.push('WATCH');
-    if (p.signals?.hfTrending?.rank) sig.push(`HF#${p.signals.hfTrending.rank}`);
-    if (p.signals?.github?.stars) sig.push(`⭐${p.signals.github.stars}`);
-    const sigTxt = sig.length ? ` (${sig.join(', ')})` : '';
-
-    lines.push(`${idx}. ${p.title}${sigTxt}`);
-    lines.push(`链接: ${p.absUrl}`);
-    lines.push(`作者陈述: ${shortText(p.authorView || p.summary, 110)}`);
-    lines.push(`专家评议: ${shortText(p.expertReview, 110)}`);
-    lines.push(`研究落地: ${shortText(p.scholarTakeaway, 130)}`);
-    lines.push('');
-  }
-  return lines.join('\n').trim();
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const kind = String(args.kind || 'daily').toLowerCase();
@@ -172,21 +144,17 @@ async function main() {
 
   const reportPub = await publishMarkdownReport(stagedReport, args.dryRun);
 
-  const caption = `${enriched?.title || `Scholar Radar · ${j1.date}`}\n${enriched?.subtitle || ''}\n一图流（精简版）`.trim();
-  await sendWhatsapp({ to, message: caption, mediaPath: stagedPoster, dryRun: args.dryRun });
+  // Per user preference: only send image + link (no extra text block).
+  // Use zero-width text so media send can proceed without visible caption.
+  await sendWhatsapp({ to, message: '\u200B', mediaPath: stagedPoster, dryRun: args.dryRun });
 
   if (reportPub?.url) {
     await sendWhatsapp({
       to,
-      message: `详细版Markdown报告（在线浏览）：${reportPub.url}`,
+      message: reportPub.url,
       mediaPath: null,
       dryRun: args.dryRun
     });
-  }
-
-  const listMsg = fmtList(enriched.papers || [], kind === 'daily' ? 8 : 10);
-  if (listMsg) {
-    await sendWhatsapp({ to, message: listMsg, mediaPath: null, dryRun: args.dryRun });
   }
 
   console.log(JSON.stringify({ ok: true, kind, to, selectedPath, enrichedPath, posterPath, reportPath, reportUrl: reportPub?.url || null, papersDir, count: selected.count }, null, 2));
