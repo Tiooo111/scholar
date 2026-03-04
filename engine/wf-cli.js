@@ -9,6 +9,8 @@ import {
   runTrends,
   scaffoldPipe,
   summarizeRuns,
+  syncCheckPack,
+  syncLockPack,
   validatePack,
 } from './wf-core.js';
 
@@ -54,7 +56,7 @@ function parseArgs(argv) {
   };
 
   let start = 1;
-  if ((out.cmd === 'run' || out.cmd === 'describe' || out.cmd === 'validate' || out.cmd === 'scaffold' || out.cmd === 'doctor') && argv[1] && !String(argv[1]).startsWith('--')) {
+  if ((out.cmd === 'run' || out.cmd === 'describe' || out.cmd === 'validate' || out.cmd === 'scaffold' || out.cmd === 'doctor' || out.cmd === 'sync-check' || out.cmd === 'sync-lock') && argv[1] && !String(argv[1]).startsWith('--')) {
     out.packId = argv[1];
     start = 2;
   }
@@ -94,7 +96,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.cmd === 'help' || args.cmd === '--help' || args.cmd === '-h') {
-    console.log(`Usage:\n  wf list [--details]\n  wf describe <pipeId>\n  wf validate <pipeId>\n  wf doctor <pipeId> [--limit 50]\n  wf scaffold <pipeId> [--base-dir pipes]\n  wf runs [--limit 20] [--summary-only|--trends]\n  wf run <pipeId> [--dry-run] [--run-dir <dir>] [--resume-run-dir <dir>] [--max-steps <n>] [--inject-deviation <type>] [--input key=value] [--inputs-json '{"task_prompt":"..."}']`);
+    console.log(`Usage:\n  wf list [--details]\n  wf describe <pipeId>\n  wf validate <pipeId>\n  wf doctor <pipeId> [--limit 50]\n  wf sync-check <pipeId>\n  wf sync-lock <pipeId>\n  wf scaffold <pipeId> [--base-dir pipes]\n  wf runs [--limit 20] [--summary-only|--trends]\n  wf run <pipeId> [--dry-run] [--run-dir <dir>] [--resume-run-dir <dir>] [--max-steps <n>] [--inject-deviation <type>] [--input key=value] [--inputs-json '{"task_prompt":"..."}']`);
     return;
   }
 
@@ -129,6 +131,21 @@ async function main() {
     if (!args.packId) throw new Error('Missing pipeId. Usage: doctor <pipeId>');
     const res = await doctorPack(args.packId, { limit: args.limit });
     console.log(JSON.stringify({ ok: res.ok, diagnosis: res }, null, 2));
+    return;
+  }
+
+  if (args.cmd === 'sync-check') {
+    if (!args.packId) throw new Error('Missing pipeId. Usage: sync-check <pipeId>');
+    const res = await syncCheckPack(args.packId);
+    console.log(JSON.stringify({ ok: res.ok, sync: res }, null, 2));
+    if (!res.ok) process.exitCode = 3;
+    return;
+  }
+
+  if (args.cmd === 'sync-lock') {
+    if (!args.packId) throw new Error('Missing pipeId. Usage: sync-lock <pipeId>');
+    const res = await syncLockPack(args.packId);
+    console.log(JSON.stringify({ ok: res.ok, sync: res }, null, 2));
     return;
   }
 

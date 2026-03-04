@@ -1,4 +1,4 @@
-# Workflow Engine (v0.6)
+# Workflow Engine (v0.7)
 
 This folder contains the execution layer for OpenPipe pipes/workflows.
 
@@ -11,6 +11,7 @@ Current capabilities:
 - Role/Node executor plugin routing (`template` | `shell` | `script` | `llm`)
 - Workflow discovery and metadata describe APIs
 - Workflow input contract validation (`workflow.yaml.inputs`)
+- Governance sync enforcement (`governance.sync` + lock file)
 
 ## 1) CLI
 
@@ -20,6 +21,7 @@ List pipes/workflows:
 npm run wf:list
 npm run wf:list -- --details
 node engine/wf-cli.js describe metapipe
+npm run wf:sync-check -- metapipe
 npm run wf:validate -- metapipe
 npm run wf:doctor -- metapipe
 npm run wf:runs -- --summary-only
@@ -57,6 +59,8 @@ Optional flags:
 - `--inject-deviation <requirements_mismatch|architecture_mismatch|implementation_bug|verification_gap>`
 - `--input key=value` (repeatable)
 - `--inputs-json '{"task_prompt":"..."}'`
+- `wf sync-check <pipeId>`
+- `wf sync-lock <pipeId>`
 - `wf doctor <pipeId> [--limit 50]`
 - `wf scaffold <pipeId> [--base-dir pipes]`
 - `wf runs [--limit 20] [--summary-only|--trends]`
@@ -158,6 +162,8 @@ Discover workflows:
 curl http://127.0.0.1:8787/workflows
 curl "http://127.0.0.1:8787/workflows?details=true"
 curl http://127.0.0.1:8787/workflows/metapipe
+curl http://127.0.0.1:8787/workflows/metapipe/sync-check
+curl -X POST http://127.0.0.1:8787/workflows/metapipe/sync-lock
 curl http://127.0.0.1:8787/workflows/metapipe/validate
 curl http://127.0.0.1:8787/workflows/metapipe/doctor?limit=100
 curl http://127.0.0.1:8787/runs/summary
@@ -198,6 +204,8 @@ Methods (JSON line protocol):
 
 - `list_workflows` (optional params: `{ details: true }`)
 - `describe_workflow` with params `{ packId }`
+- `sync_check_workflow` with params `{ packId }`
+- `sync_lock_workflow` with params `{ packId }`
 - `validate_workflow` with params `{ packId }`
 - `doctor_workflow` with params `{ packId, limit? }`
 - `scaffold_workflow` with params `{ packId, baseDir? }`
@@ -224,6 +232,8 @@ Exposed MCP tools:
 
 - `list_workflows`
 - `describe_workflow`
+- `sync_check_workflow`
+- `sync_lock_workflow`
 - `validate_workflow`
 - `doctor_workflow`
 - `scaffold_workflow`

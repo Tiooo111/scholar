@@ -10,6 +10,8 @@ import {
   runTrends,
   scaffoldPipe,
   summarizeRuns,
+  syncCheckPack,
+  syncLockPack,
   validatePack,
 } from './wf-core.js';
 
@@ -89,6 +91,20 @@ async function handleLine(line) {
       const limit = Number(params.limit || 50);
       const diagnosis = await doctorPack(packId, { limit });
       return respond({ id, result: { ok: diagnosis.ok, diagnosis } });
+    }
+
+    if (req.method === 'sync_check_workflow') {
+      const params = req.params || {};
+      const packId = params.packId;
+      const sync = await syncCheckPack(packId);
+      return respond({ id, result: { ok: sync.ok, sync } });
+    }
+
+    if (req.method === 'sync_lock_workflow') {
+      const params = req.params || {};
+      const packId = params.packId;
+      const sync = await syncLockPack(packId);
+      return respond({ id, result: { ok: sync.ok, sync } });
     }
 
     if (req.method === 'run_workflow') {

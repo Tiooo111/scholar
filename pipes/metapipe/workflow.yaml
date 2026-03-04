@@ -16,6 +16,17 @@ runtime:
         - timeout
         - contract_violation
 
+governance:
+  sync:
+    enabled: true
+    lockFile: governance.lock.json
+    tracked:
+      - workflow.yaml
+      - roles.yaml
+      - tasks.yaml
+      - contracts/
+      - templates/
+
 inputs:
   - name: task_prompt
     type: string

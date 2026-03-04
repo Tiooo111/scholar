@@ -1,0 +1,38 @@
+{
+  "version": "1",
+  "workflowId": "metapipe",
+  "tracked": [
+    "workflow.yaml",
+    "roles.yaml",
+    "tasks.yaml",
+    "contracts/",
+    "templates/"
+  ],
+  "digest": "dcb87a7b58afda21ab42ad55a7be3da836bffa2f81a44c77493f75172c67f9f1",
+  "fileHashes": {
+    "contracts/contract-rules.yaml": "aa6b89eff01853d8327f829f79cd53596c38d0a4dc1be82913e52e828f9e65a9",
+    "contracts/design.schema.json": "d5aca8a6c65bda4ff00e63cc5158cb66d1fc1cfc5df5ff56451bdd144e1caad0",
+    "contracts/pack_manifest.schema.json": "aad85cae93daad684d2ead5288ed2b829980657bdf6cdcee368ad07098618295",
+    "contracts/requirements.schema.json": "45db124f3c53ab1e4b0dc9509273caaccf61474d2eec70c0bd5d7c97215c0389",
+    "contracts/task_plan.schema.json": "ad14ead26558150098158b6138dd42eaddb8c3ab6d3e9f635fadebc88539fa24",
+    "contracts/verification_report.schema.json": "69333bddf043f894a989de3ffaf4568e21553993bca101ac334111d450c9f1b1",
+    "roles.yaml": "a018cfa27873e7e00d493e689ee27bf512c056fa43557e6b1987913ec93634df",
+    "tasks.yaml": "639a21337e3aa38ffa5c2440db96bbfaf5ef877e05fe2fd6b10ba1cd9c9cee00",
+    "templates/acceptance_criteria.md": "1baceac93635a46919a894bf742734be81153dafeee8c5e13396f48a2ac85dfd",
+    "templates/architecture_decisions.md": "7853bceb03da8e603e09ab66c77ae729641fa8a2ef980c09448ab8f8ad094efb",
+    "templates/constraints.md": "7a53069852c24b959f8253c23ce68b023e2a77f5f9e69ef2d9cefee02b65a472",
+    "templates/contracts_map.md": "6156a6c247e826e973eb42681e7cbd6d2c8b55a8312d41f693fae9ae8741b8ed",
+    "templates/deviation_report.md": "166e4ceb75849a68164a78693a21c74d6196fd5ed358c5375623e27b402492de",
+    "templates/deviation-routing-matrix.md": "f351244cd60a28b771785880e3ccfa70713b803ae308a0f5bb440d1aae342f1c",
+    "templates/handoff.md": "850c2802f8c99cab49af3d11491307b5f5633ba05ae59f99390bb2a124b630f0",
+    "templates/implementation_delta.md": "7bfe1728b92a912561deba3eb48d23fffc46490a9303335d73dffdb9c9c99013",
+    "templates/milestones.md": "00451d6719549eb39f51a3238367874b45624aafa6d396bcd32ee31fb2121360",
+    "templates/open_questions.md": "d99c6229f2fa7b84494de54863012fd75ba1d6fead2301ebf5c7e3f0dedc5f24",
+    "templates/requirements.md": "d1896aad10feba52b4b1f6639ba088b48084115a484049aca0c130c7ccfaa1d4",
+    "templates/risk_register.md": "a258924980257919dd2ce4a1ef4eb1ace2c4c61421f2a1ae25d868c458f3790c",
+    "templates/slo_targets.md": "736ee7770a424db96cfded3a4746c3f00026f72833da191e14b19bf43f773023",
+    "templates/verification_report.md": "34ef9c57c6d189d37a5ac822be44b13c1291ff0321635bf82e1935d0ee42fcd8",
+    "workflow.yaml": "0f8c0844f6412343a5b4dda053eb329809597a58b610792a8eaed60273d54626"
+  },
+  "generatedAt": "2026-03-04T09:23:33.822Z"
+}

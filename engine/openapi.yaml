@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: OpenPipe Workflow API
-  version: 0.6.0
-  description: API for discovering, validating, diagnosing, scaffolding, and running OpenPipe workflows/pipes.
+  version: 0.7.0
+  description: API for discovering, validating, diagnosing, syncing, scaffolding, and running OpenPipe workflows/pipes.
 servers:
   - url: http://127.0.0.1:8787
 paths:
@@ -135,6 +135,34 @@ paths:
         '200':
           description: Workflow diagnosis
 
+  /workflows/{packId}/sync-check:
+    get:
+      summary: Check governance lock drift for workflow
+      parameters:
+        - in: path
+          name: packId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: In sync
+        '409':
+          description: Drift detected
+
+  /workflows/{packId}/sync-lock:
+    post:
+      summary: Regenerate governance lock after intentional updates
+      parameters:
+        - in: path
+          name: packId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lock updated
+
   /workflows/{packId}/run:
     post:
       summary: Run a workflow
@@ -216,6 +244,34 @@ paths:
       responses:
         '200':
           description: Pipe diagnosis
+
+  /pipes/{pipeId}/sync-check:
+    get:
+      summary: Alias of /workflows/{packId}/sync-check
+      parameters:
+        - in: path
+          name: pipeId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pipe in sync
+        '409':
+          description: Pipe drift detected
+
+  /pipes/{pipeId}/sync-lock:
+    post:
+      summary: Alias of /workflows/{packId}/sync-lock
+      parameters:
+        - in: path
+          name: pipeId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pipe lock updated
 
   /pipes/{pipeId}/run:
     post:

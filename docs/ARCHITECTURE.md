@@ -15,6 +15,7 @@ Responsibilities:
 - Retry/timeout/backoff policy
 - Contract validation (rules + schema)
 - Input contract validation (`workflow.yaml.inputs`)
+- Governance sync enforcement (workflow-as-law with lock file)
 - Checkpoint/resume
 - Event/audit output
 - Executor plugin routing (`template`, `shell`, `script`, `llm`)
@@ -58,7 +59,7 @@ Deviations are classified and routed back to designated stages/roles:
 
 ## Invocation Surfaces
 
-- CLI (`wf list|describe|validate|doctor|scaffold|runs|run`)
-- REST (`/workflows`, `/workflows/scaffold`, `/workflows/:packId`, `/workflows/:packId/validate`, `/workflows/:packId/doctor`, `/workflows/:packId/run`, `/runs`, `/runs/summary`, `/runs/trends`)
-- StdIO RPC (`list_workflows`, `describe_workflow`, `validate_workflow`, `doctor_workflow`, `scaffold_workflow`, `list_runs`, `summarize_runs`, `run_trends`, `run_workflow`)
-- MCP tools (`list_workflows`, `describe_workflow`, `validate_workflow`, `doctor_workflow`, `scaffold_workflow`, `list_runs`, `summarize_runs`, `run_trends`, `run_workflow`)
+- CLI (`wf list|describe|sync-check|sync-lock|validate|doctor|scaffold|runs|run`)
+- REST (`/workflows`, `/workflows/scaffold`, `/workflows/:packId`, `/workflows/:packId/sync-check`, `/workflows/:packId/sync-lock`, `/workflows/:packId/validate`, `/workflows/:packId/doctor`, `/workflows/:packId/run`, `/runs`, `/runs/summary`, `/runs/trends`)
+- StdIO RPC (`list_workflows`, `describe_workflow`, `sync_check_workflow`, `sync_lock_workflow`, `validate_workflow`, `doctor_workflow`, `scaffold_workflow`, `list_runs`, `summarize_runs`, `run_trends`, `run_workflow`)
+- MCP tools (`list_workflows`, `describe_workflow`, `sync_check_workflow`, `sync_lock_workflow`, `validate_workflow`, `doctor_workflow`, `scaffold_workflow`, `list_runs`, `summarize_runs`, `run_trends`, `run_workflow`)

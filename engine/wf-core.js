@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import YAML from 'yaml';
 
@@ -85,6 +86,113 @@ function parseRunnerOutput(stdout) {
 
 function isNodeTransitionNode(node) {
   return !!node?.gate || !!node?.router;
+}
+
+async function listFilesRecursive(dir) {
+  const out = [];
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop();
+    let entries = [];
+    try {
+      entries = await fs.readdir(cur, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const e of entries) {
+      const p = path.join(cur, e.name);
+      if (e.isDirectory()) stack.push(p);
+      else if (e.isFile()) out.push(p);
+    }
+  }
+  return out.sort();
+}
+
+function sha256(text) {
+  return createHash('sha256').update(String(text)).digest('hex');
+}
+
+async function loadGovernanceConfig(packRoot, wf) {
+  const defaults = {
+    enabled: false,
+    lockFile: 'governance.lock.json',
+    tracked: ['workflow.yaml', 'roles.yaml', 'tasks.yaml', 'contracts/', 'templates/'],
+  };
+
+  const fromWorkflow = wf?.governance?.sync || {};
+  const merged = {
+    ...defaults,
+    ...fromWorkflow,
+  };
+
+  if (!Array.isArray(merged.tracked) || merged.tracked.length === 0) {
+    merged.tracked = defaults.tracked;
+  }
+
+  merged.lockFile = String(merged.lockFile || defaults.lockFile);
+  merged.enabled = !!merged.enabled;
+
+  const lockPath = path.join(packRoot, merged.lockFile);
+  return { ...merged, lockPath };
+}
+
+async function collectTrackedFiles(packRoot, tracked) {
+  const pairs = [];
+
+  for (const item of tracked) {
+    const rel = String(item || '').trim();
+    if (!rel) continue;
+
+    const abs = path.join(packRoot, rel);
+    if (rel.endsWith('/')) {
+      if (!(await fileExists(abs))) continue;
+      const files = await listFilesRecursive(abs);
+      for (const f of files) {
+        pairs.push([path.relative(packRoot, f), f]);
+      }
+    } else if (await fileExists(abs)) {
+      const stat = await fs.stat(abs).catch(() => null);
+      if (stat?.isDirectory()) {
+        const files = await listFilesRecursive(abs);
+        for (const f of files) {
+          pairs.push([path.relative(packRoot, f), f]);
+        }
+      } else {
+        pairs.push([rel, abs]);
+      }
+    }
+  }
+
+  const uniq = new Map();
+  for (const [r, a] of pairs) {
+    const norm = r.replace(/\\/g, '/');
+    uniq.set(norm, a);
+  }
+  return [...uniq.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+async function computeGovernanceSnapshot(packRoot, wf) {
+  const cfg = await loadGovernanceConfig(packRoot, wf);
+  const files = await collectTrackedFiles(packRoot, cfg.tracked);
+
+  const fileHashes = {};
+  for (const [rel, abs] of files) {
+    const content = await readText(abs);
+    fileHashes[rel] = sha256(content);
+  }
+
+  const digest = sha256(JSON.stringify(fileHashes));
+  return {
+    config: cfg,
+    snapshot: {
+      version: '1',
+      workflowId: wf?.id || null,
+      tracked: cfg.tracked,
+      digest,
+      fileHashes,
+    },
+  };
 }
 
 export async function resolveWorkflowPath(packId) {
@@ -311,6 +419,35 @@ export async function validatePack(packId) {
     }
   }
 
+  const governance = await loadGovernanceConfig(packRoot, wf);
+  if (governance.enabled) {
+    const { snapshot } = await computeGovernanceSnapshot(packRoot, wf);
+    if (!(await fileExists(governance.lockPath))) {
+      errors.push({
+        code: 'governance_lock_missing',
+        lockFile: path.relative(packRoot, governance.lockPath),
+        message: 'governance lock file missing; run wf sync-lock <pipeId>',
+      });
+    } else {
+      try {
+        const lock = JSON.parse(await readText(governance.lockPath));
+        if (lock?.digest !== snapshot.digest) {
+          errors.push({
+            code: 'governance_lock_mismatch',
+            lockFile: path.relative(packRoot, governance.lockPath),
+            message: 'logic/workflow drift detected; update governance lock after sync changes',
+          });
+        }
+      } catch {
+        errors.push({
+          code: 'governance_lock_invalid_json',
+          lockFile: path.relative(packRoot, governance.lockPath),
+          message: 'governance lock file is invalid JSON',
+        });
+      }
+    }
+  }
+
   return {
     ok: errors.length === 0,
     packId,
@@ -323,6 +460,72 @@ export async function validatePack(packId) {
       inputCount: inputDefs.length,
       contractRuleCount: Array.isArray(contracts?.rules) ? contracts.rules.length : 0,
     },
+  };
+}
+
+export async function syncCheckPack(packId) {
+  const { packRoot, wf } = await loadPackDocs(packId);
+  const governance = await loadGovernanceConfig(packRoot, wf);
+
+  if (!governance.enabled) {
+    return {
+      ok: true,
+      enabled: false,
+      packId,
+      message: 'governance sync check disabled for this pack',
+    };
+  }
+
+  const { snapshot } = await computeGovernanceSnapshot(packRoot, wf);
+  if (!(await fileExists(governance.lockPath))) {
+    return {
+      ok: false,
+      enabled: true,
+      packId,
+      lockFile: path.relative(packRoot, governance.lockPath),
+      reason: 'lock_missing',
+      snapshot,
+    };
+  }
+
+  const lock = JSON.parse(await readText(governance.lockPath));
+  return {
+    ok: lock?.digest === snapshot.digest,
+    enabled: true,
+    packId,
+    lockFile: path.relative(packRoot, governance.lockPath),
+    lock,
+    snapshot,
+  };
+}
+
+export async function syncLockPack(packId) {
+  const { packRoot, wf } = await loadPackDocs(packId);
+  const governance = await loadGovernanceConfig(packRoot, wf);
+
+  if (!governance.enabled) {
+    return {
+      ok: true,
+      enabled: false,
+      packId,
+      message: 'governance sync lock skipped because governance.sync.enabled=false',
+    };
+  }
+
+  const { snapshot } = await computeGovernanceSnapshot(packRoot, wf);
+  const lock = {
+    ...snapshot,
+    generatedAt: new Date().toISOString(),
+  };
+
+  await fs.writeFile(governance.lockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf-8');
+
+  return {
+    ok: true,
+    enabled: true,
+    packId,
+    lockFile: path.relative(packRoot, governance.lockPath),
+    lock,
   };
 }
 

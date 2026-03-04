@@ -13,6 +13,8 @@ import {
   runTrends,
   scaffoldPipe,
   summarizeRuns,
+  syncCheckPack,
+  syncLockPack,
   validatePack,
 } from './wf-core.js';
 
@@ -144,6 +146,24 @@ const server = http.createServer(async (req, res) => {
         const limit = Number(u.searchParams.get('limit') || 50);
         const diagnosis = await doctorPack(packId, { limit });
         return json(res, 200, { ok: diagnosis.ok, packId, diagnosis });
+      }
+    }
+
+    if (req.method === 'GET' && (u.pathname.startsWith('/workflows/') || u.pathname.startsWith('/pipes/'))) {
+      const m = u.pathname.match(/^\/(?:workflows|pipes)\/([^/]+)\/sync-check$/);
+      if (m) {
+        const packId = m[1];
+        const sync = await syncCheckPack(packId);
+        return json(res, sync.ok ? 200 : 409, { ok: sync.ok, packId, sync });
+      }
+    }
+
+    if (req.method === 'POST' && (u.pathname.startsWith('/workflows/') || u.pathname.startsWith('/pipes/'))) {
+      const m = u.pathname.match(/^\/(?:workflows|pipes)\/([^/]+)\/sync-lock$/);
+      if (m) {
+        const packId = m[1];
+        const sync = await syncLockPack(packId);
+        return json(res, 200, { ok: sync.ok, packId, sync });
       }
     }
 

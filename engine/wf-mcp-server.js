@@ -12,6 +12,8 @@ import {
   runTrends,
   scaffoldPipe,
   summarizeRuns,
+  syncCheckPack,
+  syncLockPack,
   validatePack,
 } from './wf-core.js';
 
@@ -71,6 +73,44 @@ server.tool(
         {
           type: 'text',
           text: JSON.stringify({ ok: validation.ok, packId: args.packId, validation }, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  'sync_check_workflow',
+  'Check whether logic/workflow files are in sync with governance lock',
+  {
+    packId: z.string().min(1),
+  },
+  async (args) => {
+    const sync = await syncCheckPack(args.packId);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: sync.ok, packId: args.packId, sync }, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  'sync_lock_workflow',
+  'Regenerate governance lock after intentional workflow/logic updates',
+  {
+    packId: z.string().min(1),
+  },
+  async (args) => {
+    const sync = await syncLockPack(args.packId);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: sync.ok, packId: args.packId, sync }, null, 2),
         },
       ],
     };

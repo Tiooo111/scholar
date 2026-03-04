@@ -57,6 +57,8 @@ List workflows:
 npm run wf:list
 npm run wf:list -- --details
 node engine/wf-cli.js describe metapipe
+npm run wf:sync-check -- metapipe
+npm run wf:sync-lock -- metapipe   # run after intentional workflow/logic changes
 npm run wf:validate -- metapipe
 npm run wf:doctor -- metapipe
 npm run wf:runs -- --summary-only
@@ -82,6 +84,8 @@ REST call:
 
 ```bash
 npm run wf:api
+curl http://127.0.0.1:8787/workflows/metapipe/sync-check
+curl -X POST http://127.0.0.1:8787/workflows/metapipe/sync-lock
 curl http://127.0.0.1:8787/workflows/metapipe/validate
 curl http://127.0.0.1:8787/workflows/metapipe/doctor?limit=100
 curl http://127.0.0.1:8787/runs/summary
