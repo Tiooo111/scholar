@@ -8,13 +8,16 @@ Given a task description, MetaPipe produces:
 - architecture and role design
 - executable task plan
 - verification + deviation routing
+- operational hardening outputs (`risk_register.md`, `slo_targets.md`, `architecture_decisions.md`)
 - final reusable pipe assets
 
 ## Stages
 1. Alignment
 2. Design
 3. Build
-4. Verify + Feedback Loop
+4. Verify
+5. Operability Optimization (risk + SLO + ADR)
+6. Feedback Loop / Finalize
 
 ## Core Principle
 `requirements.md` is the single source of truth for all downstream roles.

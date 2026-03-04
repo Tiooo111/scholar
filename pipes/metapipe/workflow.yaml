@@ -26,6 +26,9 @@ inputs:
   - name: runtime_constraints
     type: object
     required: false
+  - name: quality_target
+    type: object
+    required: false
 
 artifacts:
   root: ./artifacts/metapipe
@@ -38,6 +41,8 @@ artifacts:
     - tasks.yaml
     - verification_report.md
     - deviation_report.md
+    - risk_register.md
+    - slo_targets.md
     - pack_manifest.json
 
 nodes:
@@ -110,6 +115,20 @@ nodes:
     outputs:
       - verification_report.md
       - deviation_report.md
+    next: optimize_operability
+
+  - id: optimize_operability
+    role: optimizer
+    policy:
+      retries:
+        maxAttempts: 2
+        backoffMs: 200
+        backoffMultiplier: 2
+        retryOn: [task_error, timeout]
+    outputs:
+      - risk_register.md
+      - slo_targets.md
+      - architecture_decisions.md
     next: route_deviation
 
   - id: route_deviation

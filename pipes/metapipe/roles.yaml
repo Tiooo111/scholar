@@ -60,3 +60,13 @@ roles:
     outputs: ["verification_report.md", "deviation_report.md"]
     boundaries:
       - "No code changes; report only."
+
+  optimizer:
+    objective: "Harden runnability and operational quality via risk register + SLO targets + ADR notes."
+    executor:
+      type: template
+    inputs: ["verification_report.md", "deviation_report.md", "constraints.md", "runtime_constraints", "quality_target"]
+    outputs: ["risk_register.md", "slo_targets.md", "architecture_decisions.md"]
+    boundaries:
+      - "Must not weaken acceptance criteria or remove required contracts."
+      - "Recommendations must be testable and deployment-aware."

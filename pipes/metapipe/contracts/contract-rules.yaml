@@ -35,6 +35,26 @@ rules:
     type: yaml_keys
     requiredKeys: ["backlog"]
 
+  - file: risk_register.md
+    type: markdown_headers
+    requiredHeaders:
+      - "# risk_register.md"
+      - "## Top Risks"
+      - "## Mitigations"
+
+  - file: slo_targets.md
+    type: markdown_headers
+    requiredHeaders:
+      - "# slo_targets.md"
+      - "## Service Level Objectives"
+      - "## Measurement Plan"
+
+  - file: architecture_decisions.md
+    type: markdown_headers
+    requiredHeaders:
+      - "# architecture_decisions.md"
+      - "## Decision Log"
+
   - file: pack_manifest.json
     type: json_schema
     schema: contracts/pack_manifest.schema.json
